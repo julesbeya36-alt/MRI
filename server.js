@@ -75,7 +75,8 @@ const connectDatabase = async () => {
     return;
   } catch (error) {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error(`DATABASE_URL inaccessible en production: ${error.message}`);
+      const databaseError = error.message || error.code || String(error);
+      throw new Error(`DATABASE_URL inaccessible en production: ${databaseError}`);
     }
     console.warn('DATABASE_URL invalide ou inaccessible. Bascule vers SQLite local.');
     console.warn(error.message);

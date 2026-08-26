@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" role="img" aria-labelledby="logolbl">
+  <title id="logolbl">Petit logo église</title>
+  <rect width="120" height="120" fill="#fff" stroke="#000" stroke-width="1" stroke-dasharray="2 3"/>
+  <!-- simple cross dessinée à la main -->
+  <g stroke="#000" stroke-width="3" stroke-linecap="round">
+    <line x1="60" y1="20" x2="60" y2="90" />
+    <line x1="40" y1="55" x2="80" y2="55" />
+  </g>
+</svg>

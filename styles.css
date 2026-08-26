@@ -831,6 +831,19 @@ footer {
   color: var(--muted);
 }
 
+.form-help,
+.message-date {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 14px;
+}
+
+.message-email {
+  color: var(--primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .cards,
   .news-grid,

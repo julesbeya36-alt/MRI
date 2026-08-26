@@ -226,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminPanel = document.querySelector('[data-admin-panel]');
   const adminForm = document.querySelector('[data-admin-form]');
   const adminList = document.querySelector('[data-admin-list]');
+  const adminMessages = document.querySelector('[data-admin-messages]');
 
   const setAdminView = (isLoggedIn) => {
     if (loginBox) loginBox.classList.toggle('hidden', isLoggedIn);
@@ -344,8 +345,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const renderAdminMessages = async () => {
+    if (!adminMessages) return;
+
+    try {
+      const items = await fetchJson('/api/messages');
+      if (!items.length) {
+        adminMessages.innerHTML = '<div class="admin-item"><p>Aucun message reçu.</p></div>';
+        return;
+      }
+
+      adminMessages.innerHTML = items.map((item) => `
+        <article class="admin-item">
+          <div class="admin-item-header">
+            <strong>${item.name}</strong>
+            <a class="message-email" href="mailto:${item.email}">${item.email}</a>
+          </div>
+          <p class="message-date">${new Date(item.created_at).toLocaleString('fr-FR')}</p>
+          <p>${item.message}</p>
+        </article>
+      `).join('');
+    } catch (error) {
+      adminMessages.innerHTML = '<div class="admin-item"><p>Impossible de charger les messages.</p></div>';
+    }
+  };
+
   if (document.querySelector('[data-admin-list]')) {
     renderAdminList();
+    renderAdminMessages();
   }
 
   const logoutButton = document.querySelector('[data-admin-logout]');

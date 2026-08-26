@@ -11,6 +11,9 @@ const rootDir = __dirname;
 const dataDir = path.join(rootDir, 'data');
 const dbPath = path.join(dataDir, 'site.db');
 const uploadDir = path.join(dataDir, 'uploads');
+const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseMediaBucket = process.env.SUPABASE_MEDIA_BUCKET || 'news-media';
 let usePostgres = Boolean(process.env.DATABASE_URL);
 
 fs.mkdirSync(dataDir, { recursive: true });
@@ -49,6 +52,38 @@ const configuredDatabaseUrl = process.env.DATABASE_URL && process.env.DATABASE_U
 const openLocalDatabase = () => {
   sqlite3 = sqlite3 || require('sqlite3').verbose();
   return new sqlite3.Database(dbPath);
+};
+
+const storeMediaFile = async (file) => {
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont obligatoires pour les uploads en production.');
+    }
+    return `/uploads/${file.filename}`;
+  }
+
+  const storagePath = `${Date.now()}-${file.filename}`;
+  const fileBuffer = await fs.promises.readFile(file.path);
+  const response = await fetch(
+    `${supabaseUrl}/storage/v1/object/${supabaseMediaBucket}/${encodeURIComponent(storagePath)}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${supabaseServiceRoleKey}`,
+        apikey: supabaseServiceRoleKey,
+        'Content-Type': file.mimetype,
+        'x-upsert': 'false'
+      },
+      body: fileBuffer
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Supabase Storage a refusé le fichier (${response.status}). Vérifiez le bucket ${supabaseMediaBucket}.`);
+  }
+
+  fs.unlinkSync(file.path);
+  return `${supabaseUrl}/storage/v1/object/public/${supabaseMediaBucket}/${encodeURIComponent(storagePath)}`;
 };
 
 const connectDatabase = async () => {
@@ -243,11 +278,11 @@ app.post('/api/news', upload.fields([
     const { title, category, description, image = '', video = '', buttonText = 'En savoir plus' } = req.body || {};
     const imageFiles = req.files?.imageFile || [];
     const videoFile = req.files?.videoFile?.[0];
-    const imagePaths = imageFiles.map((file) => `/uploads/${file.filename}`);
+    const imagePaths = await Promise.all(imageFiles.map(storeMediaFile));
     const imageValue = imagePaths.length > 1
       ? JSON.stringify(imagePaths)
       : imagePaths[0] || String(image).trim();
-    const videoValue = videoFile ? `/uploads/${videoFile.filename}` : String(video).trim();
+    const videoValue = videoFile ? await storeMediaFile(videoFile) : String(video).trim();
 
     if (!title || !category || !description) {
       return res.status(400).json({ error: 'Titre, catégorie et description sont requis.' });
@@ -295,6 +330,16 @@ app.delete('/api/news/:id', async (req, res) => {
     })();
 
     [...imagePathsToDelete, existingItem?.video].forEach((mediaPath) => {
+      if (mediaPath?.includes('/storage/v1/object/public/')) {
+        const storagePath = mediaPath.split(`/storage/v1/object/public/${supabaseMediaBucket}/`)[1];
+        if (supabaseUrl && supabaseServiceRoleKey && storagePath) {
+          fetch(`${supabaseUrl}/storage/v1/object/${supabaseMediaBucket}/${storagePath}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${supabaseServiceRoleKey}`, apikey: supabaseServiceRoleKey }
+          }).catch((error) => console.error('Erreur suppression média Supabase:', error.message));
+        }
+        return;
+      }
       if (!mediaPath || !mediaPath.startsWith('/uploads/')) return;
       const filePath = path.join(uploadDir, path.basename(mediaPath));
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);

@@ -1,7 +1,6 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const sqlite3 = require('sqlite3').verbose();
 const { Pool } = require('pg');
 const multer = require('multer');
 require('dotenv').config();
@@ -40,15 +39,24 @@ const upload = multer({
 
 let db;
 let databaseMode = 'sqlite';
+let sqlite3;
 let run;
 let all;
 let get;
 
 const configuredDatabaseUrl = process.env.DATABASE_URL && process.env.DATABASE_URL.trim();
 
+const openLocalDatabase = () => {
+  sqlite3 = sqlite3 || require('sqlite3').verbose();
+  return new sqlite3.Database(dbPath);
+};
+
 const connectDatabase = async () => {
   if (!configuredDatabaseUrl) {
-    db = new sqlite3.Database(dbPath);
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('DATABASE_URL est obligatoire en production. Configurez Supabase/PostgreSQL sur Render.');
+    }
+    db = openLocalDatabase();
     usePostgres = false;
     databaseMode = 'sqlite';
     return;
@@ -66,9 +74,12 @@ const connectDatabase = async () => {
     databaseMode = 'postgres';
     return;
   } catch (error) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(`DATABASE_URL inaccessible en production: ${error.message}`);
+    }
     console.warn('DATABASE_URL invalide ou inaccessible. Bascule vers SQLite local.');
     console.warn(error.message);
-    db = new sqlite3.Database(dbPath);
+    db = openLocalDatabase();
     usePostgres = false;
     databaseMode = 'sqlite';
   }
